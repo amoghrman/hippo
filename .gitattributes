@@ -1,0 +1,9 @@
+# Normalise line endings to LF in the repo; git checks out with native endings.
+* text=auto eol=lf
+
+# Binary files — never touch line endings
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.whl  binary
+*.zip  binary
