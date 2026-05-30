@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-05-30
+
+### Added
+- Contradiction handling benchmark infrastructure (`benchmarks/contradiction/`)
+- 50 hand-crafted contradiction scenarios across 5 categories (preference_change, factual_update, corrected_misinformation, temporal_supersession, direct_negation) — MIT-licensed, stable test data
+- `LoCoMo` temporal subset loader (CC BY-NC 4.0, data downloaded separately; not redistributed)
+- `HippoAdapter` and `Mem0Adapter` implementing a common `MemorySystemAdapter` interface
+- Substring-based `contradiction_scorer` and async `llm_judge` for ambiguous cases
+- Runner with per-system, per-category breakdowns, latency reporting, and JSON results output
+- CLI: `python -m benchmarks.contradiction.runner --dataset handcrafted --systems hippo,mem0`
+- `[bench]` optional extra for `mem0ai`
+
+### Notes
+- Benchmark results not yet published — infrastructure only in this release
+- Run with: `python -m benchmarks.contradiction.runner --dataset handcrafted`
+
 ### Planned
 - Consolidation with Ebbinghaus importance decay
 - Benchmark suite (MRR, recall quality at scale vs. mem0 and vanilla pgvector)

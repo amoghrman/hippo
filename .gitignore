@@ -51,3 +51,8 @@ docker-compose.override.yml
 local_data/
 *.db
 *.sqlite
+
+# ── Benchmark data (downloaded, not redistributed) ────────────────────────────
+benchmarks/contradiction/datasets/locomo10.json
+benchmarks/contradiction/datasets/locomo_temporal.json
+benchmarks/contradiction/results/*.json

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hippo-memory"
-version = "0.1.2"
+version = "0.1.3"
 description = "A memory layer for AI agents — handles conflict resolution so your agent stops believing two contradictory things at once"
 readme = "README.md"
 license = "MIT"
@@ -44,6 +44,9 @@ local = [
 ]
 groq = [
     "groq>=0.11",
+]
+bench = [
+    "mem0ai>=0.1.0",
 ]
 
 [project.urls]
