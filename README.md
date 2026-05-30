@@ -172,9 +172,40 @@ Soft-deletes memories. Supported filter keys: `agent_id`, `user_id`, `older_than
 
 Returns the conflict resolution audit log, newest first.
 
+### `await memory.remember_batch(items, ..., conflict_detection=None, batch_size=100, on_progress=None)`
+
+Bulk-insert memories with batched embeddings. Returns UUIDs in input order. Raises `BatchPartialFailure` if any chunk fails (committed chunks are kept).
+
 ### `await memory.setup(*, reset=False)`
 
 Creates tables and enables the pgvector extension. Idempotent. Pass `reset=True` to drop and recreate all tables — useful when switching embedders with a different dimension.
+
+---
+
+## Bulk ingestion
+
+Loading existing memories at scale? Use `remember_batch()`:
+
+```python
+ids = await memory.remember_batch(
+    items=[{"content": text, "agent_id": "a1"} for text in my_existing_data],
+    conflict_detection=False,  # 10x+ faster — skip if you trust the source data
+    batch_size=100,
+    on_progress=lambda done, total: print(f"{done}/{total}"),
+)
+```
+
+With conflict detection disabled, `remember_batch()` calls `embed_batch()` once per chunk instead of `embed()` once per item — typically a **10x speedup** for API-based embedders.
+
+| N | Serial `remember()` | `remember_batch()` no-CD | Speedup |
+|---|---|---|---|
+| 100 | 1.6 s | 0.15 s | 10.5× |
+| 500 | 9.9 s | 1.2 s | 8.0× |
+| 1000 | 17.3 s | 1.8 s | 9.7× |
+
+*Measured with 5 ms/embed, 10 ms/embed_batch latency.*
+
+With conflict detection enabled, batches are still faster than serial calls (embeddings are batched), but LLM calls for each item run sequentially to preserve intra-batch ordering — a later item in the batch can supersede an earlier one.
 
 ---
 

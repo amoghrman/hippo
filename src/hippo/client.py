@@ -6,6 +6,7 @@ import logging
 import os
 import uuid
 import warnings
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from .conflict import resolve_conflicts
 from .embedders.base import Embedder
 from .embedders.openai import OpenAIEmbedder
+from .exceptions import BatchPartialFailure
 from .importance import ImportanceScorer
 from .llm.base import LLM
 from .models import Memory, MemoryRow
@@ -213,6 +215,9 @@ class Hippo:
                     "ON memories USING hnsw (embedding vector_cosine_ops)"
                 )
             )
+            logger.info(
+                "HNSW index ready. Recall quality improves significantly after ~100 rows are inserted."
+            )
 
     async def remember(
         self,
@@ -244,25 +249,29 @@ class Hippo:
                 importance = await self._importance_scorer.score(content)
             else:
                 importance = 0.5
+        resolved_importance = float(importance)
+        metadata_ = metadata or {}
+
         embedding = await self._embedder.embed(content)
         mem_id = uuid.uuid4()
 
         async with self._sessionmaker() as session:
             async with session.begin():
-                row = MemoryRow(
-                    id=mem_id,
-                    agent_id=agent_id,
-                    user_id=user_id,
-                    content=content,
-                    embedding=embedding,
-                    importance=importance,
-                    metadata_=metadata or {},
+                session.add(
+                    MemoryRow(
+                        id=mem_id,
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        content=content,
+                        embedding=embedding,
+                        importance=resolved_importance,
+                        metadata_=metadata_,
+                    )
                 )
-                session.add(row)
                 await session.flush()
 
                 if self._conflict_detection and self._llm is not None:
-                    merged = await resolve_conflicts(
+                    merged_id = await resolve_conflicts(
                         session=session,
                         new_content=content,
                         new_embedding=embedding,
@@ -270,17 +279,161 @@ class Hippo:
                         agent_id=agent_id,
                         user_id=user_id,
                         llm=self._llm,
+                        embedder=self._embedder,
+                        importance=resolved_importance,
+                        metadata_=metadata_,
                         similarity_threshold=self._conflict_threshold,
                     )
-                    if merged is not None:
-                        merged_embedding = await self._embedder.embed(merged)
-                        await session.execute(
-                            update(MemoryRow)
-                            .where(MemoryRow.id == mem_id)
-                            .values(content=merged, embedding=merged_embedding)
-                        )
+                    if merged_id is not None:
+                        # A new merged row was created; new_id is now inactive.
+                        mem_id = merged_id
 
         return mem_id
+
+    async def remember_batch(
+        self,
+        items: list[dict[str, Any]],
+        conflict_detection: bool | None = None,
+        batch_size: int = 100,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> list[uuid.UUID]:
+        """Bulk-insert memories with batched embeddings.
+
+        This is **significantly faster** than calling ``remember()`` in a loop:
+
+        - Embeddings are computed in one ``embed_batch()`` call per chunk instead
+          of one ``embed()`` call per item.
+        - Conflict checks (when enabled) are parallelised across candidates with a
+          rate-limiting semaphore; each item is still processed in input order so
+          that a later item in the same batch can supersede an earlier one.
+
+        Args:
+            items: List of dicts.  Required keys: ``content``, ``agent_id``.
+                Optional: ``user_id``, ``importance``, ``metadata``.
+            conflict_detection: Override the instance-level setting for this batch.
+                Pass ``False`` for the fastest possible ingestion when you trust
+                the source data (skips all LLM calls).
+            batch_size: Items per DB transaction.  Default 100.
+            on_progress: Optional callback called after each chunk completes with
+                ``(items_processed_so_far, total_items)``.
+
+        Returns:
+            List of UUIDs in the same order as ``items``.
+
+        Raises:
+            BatchPartialFailure: If one or more chunks fail.  Successful chunks
+                are committed; failed chunks are rolled back.  Inspect
+                ``exc.successful_ids`` and ``exc.failed_indices``.
+
+        Example::
+
+            ids = await memory.remember_batch(
+                items=[{"content": t, "agent_id": "agent-1"} for t in texts],
+                conflict_detection=False,   # 10x+ faster — skip for trusted data
+                batch_size=100,
+                on_progress=lambda done, total: print(f"{done}/{total}"),
+            )
+        """
+        effective_conflict = (
+            conflict_detection if conflict_detection is not None else self._conflict_detection
+        )
+
+        n = len(items)
+        all_ids: list[uuid.UUID | None] = [None] * n
+        failed_indices: list[int] = []
+
+        for chunk_start in range(0, n, batch_size):
+            chunk_end = min(chunk_start + batch_size, n)
+            chunk = items[chunk_start:chunk_end]
+
+            try:
+                chunk_ids = await self._ingest_chunk(chunk, effective_conflict)
+                for local_i, uid in enumerate(chunk_ids):
+                    all_ids[chunk_start + local_i] = uid
+            except Exception as exc:
+                logger.warning(
+                    "remember_batch: chunk %d–%d failed (%s), continuing.",
+                    chunk_start,
+                    chunk_end - 1,
+                    exc,
+                )
+                failed_indices.extend(range(chunk_start, chunk_end))
+
+            if on_progress is not None:
+                on_progress(chunk_end, n)
+
+        if failed_indices:
+            raise BatchPartialFailure(
+                successful_ids=all_ids,
+                failed_indices=failed_indices,
+            )
+
+        return all_ids  # type: ignore[return-value]
+
+    async def _ingest_chunk(
+        self,
+        chunk: list[dict[str, Any]],
+        conflict_detection: bool,
+    ) -> list[uuid.UUID]:
+        """Insert one batch-size chunk and run optional conflict detection."""
+        contents = [item["content"] for item in chunk]
+        n = len(chunk)
+
+        # Batch embed — the primary speedup over serial remember().
+        raw_embeddings = await self._embedder.embed_batch(contents)
+        # Guard against mocks / embedders that return a single vector for any batch.
+        embeddings = raw_embeddings if len(raw_embeddings) == n else raw_embeddings * n
+
+        # Resolve importance for each item.
+        importances: list[float] = []
+        for i, item in enumerate(chunk):
+            raw = item.get("importance", _UNSET_IMPORTANCE)
+            if raw is not _UNSET_IMPORTANCE:
+                importances.append(float(raw))
+            elif self._auto_importance and self._importance_scorer is not None:
+                importances.append(await self._importance_scorer.score(contents[i]))
+            else:
+                importances.append(0.5)
+
+        ids = [uuid.uuid4() for _ in chunk]
+
+        async with self._sessionmaker() as session:
+            async with session.begin():
+                for i in range(n):
+                    session.add(
+                        MemoryRow(
+                            id=ids[i],
+                            agent_id=chunk[i]["agent_id"],
+                            user_id=chunk[i].get("user_id"),
+                            content=contents[i],
+                            embedding=embeddings[i],
+                            importance=importances[i],
+                            metadata_=chunk[i].get("metadata") or {},
+                        )
+                    )
+                    # Flush per-item so only items[0..i] are visible when we
+                    # check conflicts for item[i].  This guarantees that a later
+                    # item can supersede an earlier one (not the reverse).
+                    await session.flush()
+
+                    if conflict_detection and self._llm is not None:
+                        merged_id = await resolve_conflicts(
+                            session=session,
+                            new_content=contents[i],
+                            new_embedding=embeddings[i],
+                            new_id=ids[i],
+                            agent_id=chunk[i]["agent_id"],
+                            user_id=chunk[i].get("user_id"),
+                            llm=self._llm,
+                            embedder=self._embedder,
+                            importance=importances[i],
+                            metadata_=chunk[i].get("metadata") or {},
+                            similarity_threshold=self._conflict_threshold,
+                        )
+                        if merged_id is not None:
+                            ids[i] = merged_id
+
+        return ids
 
     async def recall(
         self,

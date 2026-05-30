@@ -8,10 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Batch ingestion (`remember_batch`) for high-throughput pipelines
 - Consolidation with Ebbinghaus importance decay
-- Benchmark suite (MRR, latency at scale vs. mem0 and vanilla pgvector)
+- Benchmark suite (MRR, recall quality at scale vs. mem0 and vanilla pgvector)
 - TypeScript SDK
+
+## [0.1.2] — 2026-05-30
+
+### Added
+- `remember_batch()` for bulk ingestion with batched embeddings (~10x speedup over serial calls)
+- `on_progress` callback in `remember_batch()` for progress reporting
+- `BatchPartialFailure` exception with `successful_ids` and `failed_indices` for granular error handling
+- `benchmarks/batch_vs_serial.py` — runnable benchmark comparing serial vs batch ingestion
+
+### Fixed
+- **Merge race condition**: merged memories are now inserted as new rows (with both originals superseded), eliminating the in-place-update race that could corrupt content under concurrent writes
+- **Multi-conflict chaining**: all candidates above the similarity threshold are now processed (not just the first match); multiple merge targets are synthesised pairwise into a single new memory
+- **Intra-batch conflict ordering**: items are flushed and conflict-checked in input order, so a later item in a batch correctly supersedes an earlier one (not the reverse)
+- **Fixture teardown race**: `_truncate()` uses `TRUNCATE … CASCADE` for atomic FK-safe cleanup
+
+### Changed
+- `setup()` now logs an INFO message when the HNSW index is ready
+- `conftest.py` mock embedder's `embed_batch` now returns the correct number of vectors per input
 
 ## [0.1.1] — 2026-05-29
 

@@ -2,8 +2,16 @@
 
 from .client import Hippo
 from .consolidation import Consolidator
+from .exceptions import BatchPartialFailure
 from .importance import ImportanceScorer, LLMImportanceScorer
 from .models import Memory
 
-__all__ = ["Hippo", "Memory", "Consolidator", "ImportanceScorer", "LLMImportanceScorer"]
-__version__ = "0.1.1"
+__all__ = [
+    "Hippo",
+    "Memory",
+    "Consolidator",
+    "ImportanceScorer",
+    "LLMImportanceScorer",
+    "BatchPartialFailure",
+]
+__version__ = "0.1.2"

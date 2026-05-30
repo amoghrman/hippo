@@ -37,7 +37,8 @@ def make_mock_embedder() -> MagicMock:
     """Embedder that always returns [0.1]*1536 — no OpenAI calls."""
     emb = MagicMock(spec=Embedder)
     emb.embed = AsyncMock(return_value=FIXED_VEC)
-    emb.embed_batch = AsyncMock(return_value=[FIXED_VEC])
+    # embed_batch must return one vector per input text.
+    emb.embed_batch = AsyncMock(side_effect=lambda texts: [FIXED_VEC] * len(texts))
     emb.dimensions = 1536
     return emb
 
