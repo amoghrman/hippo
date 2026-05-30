@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hippo-memory"
-version = "0.1.0"
+version = "0.1.1"
 description = "A memory layer for AI agents — handles conflict resolution so your agent stops believing two contradictory things at once"
 readme = "README.md"
 license = "MIT"
@@ -47,9 +47,9 @@ groq = [
 ]
 
 [project.urls]
-Homepage   = "https://github.com/<YOUR_USERNAME>/hippo"
-Repository = "https://github.com/<YOUR_USERNAME>/hippo"
-Issues     = "https://github.com/<YOUR_USERNAME>/hippo/issues"
+Homepage   = "https://github.com/amoghrman/hippo"
+Repository = "https://github.com/amoghrman/hippo"
+Issues     = "https://github.com/amoghrman/hippo/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hippo"]

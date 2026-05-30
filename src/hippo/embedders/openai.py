@@ -1,4 +1,5 @@
 """OpenAI embedding implementation."""
+
 from openai import AsyncOpenAI
 
 from .base import Embedder

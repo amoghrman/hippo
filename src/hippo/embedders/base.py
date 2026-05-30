@@ -1,4 +1,5 @@
 """Abstract base class for text embedders."""
+
 from abc import ABC, abstractmethod
 
 

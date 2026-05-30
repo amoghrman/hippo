@@ -7,6 +7,7 @@ Planned features:
 
 Track progress: https://github.com/<YOUR_USERNAME>/hippo/issues
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -36,9 +37,7 @@ class Consolidator:
 
             stats = await consolidator.run(agent_id="agent-1")
         """
-        raise NotImplementedError(
-            "Consolidation is on the roadmap but not yet implemented."
-        )
+        raise NotImplementedError("Consolidation is on the roadmap but not yet implemented.")
 
     async def apply_forgetting_curve(
         self,
@@ -52,6 +51,4 @@ class Consolidator:
 
             deactivated = await consolidator.apply_forgetting_curve("agent-1")
         """
-        raise NotImplementedError(
-            "Forgetting curves are on the roadmap but not yet implemented."
-        )
+        raise NotImplementedError("Forgetting curves are on the roadmap but not yet implemented.")

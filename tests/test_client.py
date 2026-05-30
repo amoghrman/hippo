@@ -1,6 +1,7 @@
 """Tests for the core Hippo API: remember, recall, forget."""
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -142,7 +143,7 @@ async def test_forget_by_filter(memory_client: Hippo) -> None:
     recent_id = await memory_client.remember("Fresh recent memory", agent_id=agent_id)
 
     # Backdate the old memory to 100 days ago
-    cutoff_ts = datetime.now(tz=timezone.utc) - timedelta(days=100)
+    cutoff_ts = datetime.now(tz=UTC) - timedelta(days=100)
     async with memory_client._sessionmaker() as session:
         async with session.begin():
             await session.execute(
@@ -150,9 +151,7 @@ async def test_forget_by_filter(memory_client: Hippo) -> None:
                 {"ts": cutoff_ts, "id": old_id},
             )
 
-    count = await memory_client.forget(
-        filter={"agent_id": agent_id, "older_than_days": 90}
-    )
+    count = await memory_client.forget(filter={"agent_id": agent_id, "older_than_days": 90})
     assert count == 1
 
     results = await memory_client.recall("memory", agent_id=agent_id)

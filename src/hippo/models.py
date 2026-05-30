@@ -1,9 +1,10 @@
 """SQLAlchemy ORM models and Pydantic public types."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from pydantic import BaseModel, Field
@@ -72,13 +73,13 @@ class Memory(BaseModel):
 
     id: uuid.UUID
     agent_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     content: str
     importance: float = 0.5
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
-    superseded_by: Optional[uuid.UUID] = None
+    superseded_by: uuid.UUID | None = None
     is_active: bool = True
     score: float = 0.0  # filled in by recall(), not stored in DB
 
@@ -97,7 +98,7 @@ class ConflictLog(BaseModel):
     memory_id_old: uuid.UUID
     memory_id_new: uuid.UUID
     decision: str
-    reason: Optional[str] = None
+    reason: str | None = None
     ts: datetime
 
     model_config = {"from_attributes": True}

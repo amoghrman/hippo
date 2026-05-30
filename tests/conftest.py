@@ -6,15 +6,17 @@ Tests require a running Postgres with pgvector. Start one with:
 The database URL defaults to the docker-compose values. Override via:
     TEST_DATABASE_URL=postgresql+asyncpg://... pytest
 """
+
 import os
 
 # Provide a dummy key so OpenAILLM can be instantiated in tests.
 # All LLM calls are mocked; this key is never sent to a real API.
 os.environ.setdefault("OPENAI_API_KEY", "test-placeholder-no-real-api-calls")
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy import text
 
 from hippo import Hippo
@@ -69,8 +71,9 @@ def mock_llm() -> MagicMock:
 async def _truncate(client: Hippo) -> None:
     async with client._sessionmaker() as session:
         async with session.begin():
-            await session.execute(text("DELETE FROM conflict_log"))
-            await session.execute(text("DELETE FROM memories"))
+            # TRUNCATE CASCADE handles FK ordering (conflict_log → memories,
+            # and the self-referential memories.superseded_by) atomically.
+            await session.execute(text("TRUNCATE TABLE conflict_log, memories CASCADE"))
 
 
 # ── Client fixtures ────────────────────────────────────────────────────────────

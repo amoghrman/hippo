@@ -1,4 +1,5 @@
 """Local sentence-transformers embedder — no API key required."""
+
 from __future__ import annotations
 
 import asyncio

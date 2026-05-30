@@ -6,6 +6,7 @@ On every remember(), we:
   3. Apply the resolution: supersede, merge, or coexist.
   4. Log every conflict decision to conflict_log.
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """Abstract LLM interface for conflict resolution."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -33,7 +34,7 @@ class ConflictResult:
 
 
 class LLM(ABC):
-    """Abstract base class for LLMs used in conflict resolution."""
+    """Abstract base class for LLMs used in conflict resolution and importance scoring."""
 
     @abstractmethod
     async def check_conflict(self, old_content: str, new_content: str) -> ConflictResult:
@@ -43,4 +44,9 @@ class LLM(ABC):
     @abstractmethod
     async def synthesize_merge(self, old_content: str, new_content: str) -> str:
         """Synthesise a single merged memory from two partially overlapping ones."""
+        ...
+
+    @abstractmethod
+    async def complete(self, prompt: str) -> str:
+        """Send a free-form prompt and return the raw text response."""
         ...

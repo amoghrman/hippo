@@ -3,9 +3,10 @@
 The SentenceTransformers tests are marked slow because they download/load a
 model on first run. Skip them with: pytest -m "not slow"
 """
+
 import pytest
 
-from hippo.embedders.sentence_transformers import SentenceTransformersEmbedder, _KNOWN_DIMS
+from hippo.embedders.sentence_transformers import _KNOWN_DIMS, SentenceTransformersEmbedder
 
 
 def test_known_dims_lookup() -> None:

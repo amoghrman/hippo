@@ -1,4 +1,5 @@
 """Groq-backed LLM for conflict resolution."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import logging
 
 from groq import AsyncGroq
 
-from .base import ConflictResult, LLM, _CONFLICT_PROMPT
+from .base import _CONFLICT_PROMPT, LLM, ConflictResult
 
 logger = logging.getLogger(__name__)
 
@@ -63,3 +64,11 @@ class GroqLLM(LLM):
             temperature=0,
         )
         return (response.choices[0].message.content or new_content).strip()
+
+    async def complete(self, prompt: str) -> str:
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+        )
+        return (response.choices[0].message.content or "").strip()

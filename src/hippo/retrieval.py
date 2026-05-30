@@ -1,4 +1,5 @@
 """Hybrid retrieval: vector similarity + BM25 + recency decay + importance."""
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

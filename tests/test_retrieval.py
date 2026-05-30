@@ -1,4 +1,5 @@
 """Tests for the hybrid retrieval algorithm."""
+
 import uuid
 
 import pytest
@@ -24,9 +25,7 @@ async def test_hybrid_score_uses_importance(memory_client: Hippo) -> None:
 @pytest.mark.asyncio
 async def test_recall_empty_returns_empty_list(memory_client: Hippo) -> None:
     """Recall on an agent with no memories returns an empty list."""
-    results = await memory_client.recall(
-        "anything", agent_id=f"empty-agent-{uuid.uuid4().hex}"
-    )
+    results = await memory_client.recall("anything", agent_id=f"empty-agent-{uuid.uuid4().hex}")
     assert results == []
 
 
@@ -46,9 +45,7 @@ async def test_bm25_keyword_boost(memory_client: Hippo) -> None:
         importance=0.5,
     )
 
-    results = await memory_client.recall(
-        "Does the user enjoy chess?", agent_id=agent_id, limit=2
-    )
+    results = await memory_client.recall("Does the user enjoy chess?", agent_id=agent_id, limit=2)
 
     assert "chess" in results[0].content.lower()
 

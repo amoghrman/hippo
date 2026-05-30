@@ -4,7 +4,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-<!-- TODO: add CI badge after first GH Actions run -->
+[![CI](https://github.com/amoghrman/hippo/actions/workflows/ci.yml/badge.svg)](https://github.com/amoghrman/hippo/actions/workflows/ci.yml)
 
 <!-- TODO: insert demo.gif here after recording -->
 
@@ -67,12 +67,16 @@ Hippo auto-detects which backend to use: `OPENAI_API_KEY` → OpenAI for both em
 
 | Feature | Hippo | mem0 | Letta | Zep |
 |---|:---:|:---:|:---:|:---:|
-| Conflict resolution | **Yes** | No | Partial | No |
-| Hybrid retrieval (BM25 + vector) | **Yes** | Vector only | Vector only | Vector only |
+| Conflict resolution | **Yes** | No | No¹ | No |
 | Conflict audit log | **Yes** | No | No | No |
+| Hybrid retrieval (BM25 + vector) | Yes | Yes² | ? | ? |
 | Pluggable embedder | Yes | Yes | Yes | Yes |
-| Self-hosted Postgres | Yes | No (cloud) | Yes | Yes |
-| Pure Python library (no server) | Yes | No | No | No |
+| Self-hosted | Yes | Yes | Yes | Yes |
+
+¹ Letta uses block-based memory that overwrites rather than detecting semantic contradictions between stored facts.
+² mem0 hybrid search requires `pip install mem0ai[nlp]`; standard install is vector-only.
+
+*Comparison reflects upstream behavior as of May 2026; corrections welcome via [PR](https://github.com/amoghrman/hippo/pulls).*
 
 ---
 
@@ -220,7 +224,7 @@ uv run pytest                 # full suite, includes sentence-transformers model
 See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue before starting large changes.
 
 ```bash
-git clone https://github.com/<YOUR_USERNAME>/hippo
+git clone https://github.com/amoghrman/hippo
 cd hippo
 uv sync --extra dev
 docker compose up -d

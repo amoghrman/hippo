@@ -2,6 +2,7 @@
 
 All LLM calls are mocked via ConflictResult. Postgres is real.
 """
+
 import uuid
 from unittest.mock import AsyncMock
 

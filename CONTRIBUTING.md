@@ -11,7 +11,7 @@ Thanks for your interest. Hippo is MIT-licensed and welcomes pull requests.
 **Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/), Docker (or local Postgres 15+ with pgvector)
 
 ```bash
-git clone https://github.com/<YOUR_USERNAME>/hippo
+git clone https://github.com/amoghrman/hippo
 cd hippo
 
 # Install all dependencies including dev extras

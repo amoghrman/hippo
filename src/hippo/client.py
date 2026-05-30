@@ -1,11 +1,12 @@
 """Hippo — the main public API."""
+
 from __future__ import annotations
 
 import logging
 import os
 import uuid
 import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text, update
@@ -15,13 +16,15 @@ from sqlalchemy.orm import sessionmaker
 from .conflict import resolve_conflicts
 from .embedders.base import Embedder
 from .embedders.openai import OpenAIEmbedder
+from .importance import ImportanceScorer
 from .llm.base import LLM
-from .models import MemoryRow, Memory
+from .models import Memory, MemoryRow
 from .retrieval import hybrid_recall
 
 logger = logging.getLogger(__name__)
 
 _AUTO = object()  # sentinel: "auto-detect from environment"
+_UNSET_IMPORTANCE = object()  # sentinel: "importance not explicitly passed by caller"
 
 
 class Hippo:
@@ -51,6 +54,8 @@ class Hippo:
         conflict_model: str = "gpt-4o-mini",
         conflict_threshold: float = 0.85,
         retrieval_weights: dict[str, float] | None = None,
+        auto_importance: bool = False,
+        importance_scorer: ImportanceScorer | None = None,
     ) -> None:
         self._engine: AsyncEngine = create_async_engine(database_url, echo=False)
         self._sessionmaker: Any = sessionmaker(
@@ -76,10 +81,12 @@ class Hippo:
                 if embedder is None:
                     embedder = OpenAIEmbedder(api_key=_oai)
             elif _groq:
-                from .llm.groq import GroqLLM
                 from .embedders.sentence_transformers import SentenceTransformersEmbedder
+                from .llm.groq import GroqLLM
 
-                groq_model = "llama-3.1-8b-instant" if conflict_model == "gpt-4o-mini" else conflict_model
+                groq_model = (
+                    "llama-3.1-8b-instant" if conflict_model == "gpt-4o-mini" else conflict_model
+                )
                 llm = GroqLLM(model=groq_model, api_key=_groq)
                 if embedder is None:
                     embedder = SentenceTransformersEmbedder()
@@ -103,6 +110,12 @@ class Hippo:
 
         self._llm: LLM | None = llm
         self._embedder: Embedder = embedder
+        self._auto_importance = auto_importance
+        if auto_importance and importance_scorer is None and self._llm is not None:
+            from .importance import LLMImportanceScorer
+
+            importance_scorer = LLMImportanceScorer(self._llm)
+        self._importance_scorer: ImportanceScorer | None = importance_scorer
 
     async def setup(self, *, reset: bool = False) -> None:
         """Create tables and enable the pgvector extension.
@@ -144,9 +157,7 @@ class Hippo:
                         row[0],
                         dim,
                     )
-                    await conn.execute(
-                        text("DROP INDEX IF EXISTS idx_memories_embedding")
-                    )
+                    await conn.execute(text("DROP INDEX IF EXISTS idx_memories_embedding"))
                     # USING NULL: existing rows have the wrong dimension and can't
                     # be cast — their embeddings are invalidated and set to NULL.
                     await conn.execute(
@@ -208,12 +219,15 @@ class Hippo:
         content: str,
         agent_id: str,
         user_id: str | None = None,
-        importance: float = 0.5,
+        importance: float = _UNSET_IMPORTANCE,  # type: ignore[assignment]
         metadata: dict[str, Any] | None = None,
     ) -> uuid.UUID:
         """Store a memory and run conflict resolution against existing memories.
 
         Returns the UUID of the newly created (or merged) memory.
+
+        When ``auto_importance=True`` on the client and no explicit ``importance``
+        is passed, the importance is scored automatically using the configured LLM.
 
         Example::
 
@@ -225,6 +239,11 @@ class Hippo:
                 metadata={"source": "settings"},
             )
         """
+        if importance is _UNSET_IMPORTANCE:  # type: ignore[comparison-overlap]
+            if self._auto_importance and self._importance_scorer is not None:
+                importance = await self._importance_scorer.score(content)
+            else:
+                importance = 0.5
         embedding = await self._embedder.embed(content)
         mem_id = uuid.uuid4()
 
@@ -323,9 +342,7 @@ class Hippo:
             async with session.begin():
                 if memory_id is not None:
                     result = await session.execute(
-                        update(MemoryRow)
-                        .where(MemoryRow.id == memory_id)
-                        .values(is_active=False)
+                        update(MemoryRow).where(MemoryRow.id == memory_id).values(is_active=False)
                     )
                     return result.rowcount  # type: ignore[return-value]
 
@@ -341,7 +358,7 @@ class Hippo:
                     params["user_id"] = filter["user_id"]  # type: ignore[index]
 
                 if "older_than_days" in filter:  # type: ignore[operator]
-                    cutoff = datetime.now(tz=timezone.utc) - timedelta(
+                    cutoff = datetime.now(tz=UTC) - timedelta(
                         days=filter["older_than_days"]  # type: ignore[index]
                     )
                     conditions.append("created_at < :cutoff")
@@ -387,8 +404,7 @@ class Hippo:
             params: dict[str, Any] = {"limit": limit}
             if agent_id:
                 query = text(
-                    base_sql
-                    + " WHERE m_new.agent_id = :agent_id ORDER BY cl.ts DESC LIMIT :limit"
+                    base_sql + " WHERE m_new.agent_id = :agent_id ORDER BY cl.ts DESC LIMIT :limit"
                 )
                 params["agent_id"] = agent_id
             else:
